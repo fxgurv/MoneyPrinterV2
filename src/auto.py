@@ -102,14 +102,14 @@ def switch_account(youtube, account_nickname):
         return False
 
 def target_channel(youtube, target_channel_name):
-    current_channel = get_active_channel_name(youtube)
-    if current_channel == target_channel_name:
+    active_channel = get_active_channel_name(youtube)
+    if active_channel == target_channel_name:
         return True
 
     if switch_account(youtube, target_channel_name):
         time.sleep(5)
-        current_channel = get_active_channel_name(youtube)
-        if current_channel == target_channel_name:
+        active_channel = get_active_channel_name(youtube)
+        if active_channel == target_channel_name:
             return True
     return False
 
@@ -148,7 +148,9 @@ def process_accounts():
 
             info("All accounts processed")
             for i in range(18000, 0, -1):
-                sys.stdout.write(f"\rrestarting in {i // 60} minutes and {i % 60} seconds...")
+                hours, remainder = divmod(i, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                sys.stdout.write(f"\rrestarting in {hours} hours, {minutes} minutes, and {seconds} seconds...")
                 sys.stdout.flush()
                 time.sleep(1)
             print("\n")
