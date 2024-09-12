@@ -1,5 +1,7 @@
 import schedule
 import subprocess
+import os
+import sys
 
 from art import *
 from cache import *
@@ -19,11 +21,9 @@ from classes.AFM import AffiliateMarketing
 def main():
 
     # Get user input
-    # user_input = int(question("Select an option: "))
     valid_input = False
     while not valid_input:
         try:
-    # Show user options
             info("\n============ OPTIONS ============", False)
 
             for idx, option in enumerate(OPTIONS):
@@ -40,7 +40,6 @@ def main():
             print("\n" * 100)
             print(f"Invalid input: {e}")
 
-
     # Start the selected option
     if user_input == 1:
         info("Starting YT Shorts Automater...")
@@ -48,12 +47,13 @@ def main():
         cached_accounts = get_accounts("youtube")
 
         if len(cached_accounts) == 0:
-            warning("No accounts found in cache. Create one now?")
-            user_input = question("Yes/No: ")
+            info("No accounts found in cache. Choose an option:")
+            print(colored(" 1. Create one now?", "cyan"))
+            print(colored(" 2. Auto setup", "cyan"))
+            user_input = input("Select an option: ").strip()
 
-            if user_input.lower() == "yes":
+            if user_input == '1':
                 generated_uuid = str(uuid4())
-
                 success(f" => Generated ID: {generated_uuid}")
                 nickname = question(" => Enter a nickname for this account: ")
                 fp_profile = question(" => Enter the path to the Firefox profile: ")
@@ -68,6 +68,23 @@ def main():
                     "language": language,
                     "videos": []
                 })
+            elif user_input == '2':
+                temp_youtube = YouTube("temp", "temp", get_firefox_profile_path(), "temp", get_twitter_language(), get_headless())
+                channels = temp_youtube.get_all_channels()
+                temp_youtube.browser.quit()
+
+                for channel in channels:
+                    generated_uuid = str(uuid4())
+                    success(f" => Generated ID for channel '{channel['name']}': {generated_uuid}")
+                    niche = question(f" => Enter the niche for channel '{channel['name']}': ")
+                    add_account("youtube", {
+                        "id": generated_uuid,
+                        "nickname": channel['name'],
+                        "firefox_profile": get_firefox_profile_path(),
+                        "niche": niche,
+                        "language": get_twitter_language(),
+                        "videos": []
+                    })
         else:
             table = PrettyTable()
             table.field_names = ["ID", "UUID", "Nickname", "Niche"]
