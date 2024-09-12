@@ -15,12 +15,13 @@ class TTS:
         Returns:
             None
         """
-        venv_site_packages = "venv\\Lib\\site-packages"
+#        venv_site_packages = "venv\\Lib\\site-packages"
+        site_packages = next((p for p in sys.path if 'site-packages' in p), None)
 
         # Path to the .models.json file
         models_json_path = os.path.join(
             ROOT_DIR,
-            venv_site_packages,
+#            venv_site_packages,
             "TTS",
             ".models.json",
         )
@@ -54,7 +55,7 @@ class TTS:
         """
         return self._synthesizer
 
-    def synthesize(self, text: str, output_file: str = os.path.join(ROOT_DIR, ".mp", "audio.wav")) -> str:
+    def synthesize(self, text: str, output_file: str = "audio.wav") -> str:
         """
         Synthesizes the given text into speech.
 
