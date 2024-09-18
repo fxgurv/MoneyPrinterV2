@@ -57,6 +57,7 @@ class YouTube:
         Returns:
             None
         """
+        info(f"Initializing YouTube class for account: {account_nickname}")
         self._account_uuid: str = account_uuid
         self._account_nickname: str = account_nickname
         self._fp_profile_path: str = fp_profile_path
@@ -65,21 +66,23 @@ class YouTube:
 
         self.images = []
 
-        # Initialize the Firefox profile
+        info(f"Niche: {niche}, Language: {language}")
+
+        info("Setting up Firefox profile")
         self.options: Options = Options()
         
-        # Set headless state of browser
         if get_headless():
+            info("Setting browser to headless mode")
             self.options.add_argument("--headless")
 
-        # Set the profile path
+        info(f"Setting Firefox profile path: {fp_profile_path}")
         self.options.add_argument("-profile")
         self.options.add_argument(fp_profile_path)
 
-        # Set the service
+        info("Installing GeckoDriver")
         self.service: Service = Service(GeckoDriverManager().install())
 
-        # Initialize the browser
+        info("Initializing Firefox browser")
         self.browser: webdriver.Firefox = webdriver.Firefox(service=self.service, options=self.options)
 
     @property
@@ -112,37 +115,21 @@ class YouTube:
         Returns:
             response (str): The generated AI Repsonse.
         """
+        info(f"Generating response for prompt: {prompt[:50]}...")
         if get_model() == "google":
+            info("Using Google's Gemini model")
             import google.generativeai as genai
-
             genai.configure(api_key=get_gemini_api_key())
-
             model = genai.GenerativeModel('gemini-pro')
-
             response: str = model.generate_content(prompt).text
-
-            return response
-
-        if not model:
-            return g4f.ChatCompletion.create(
-                model=parse_model(get_model()),
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
-            )
         else:
-            return g4f.ChatCompletion.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
+            info(f"Using model: {parse_model(get_model()) if not model else model}")
+            response = g4f.ChatCompletion.create(
+                model=parse_model(get_model()) if not model else model,
+                messages=[{"role": "user", "content": prompt}]
             )
+        info(f"Response generated successfully, length: {len(response)} characters")
+        return response
 
     def generate_topic(self) -> str:
         """
@@ -151,12 +138,14 @@ class YouTube:
         Returns:
             topic (str): The generated topic.
         """
+        info("Generating topic for YouTube video")
         completion = self.generate_response(f"Please generate a specific video idea that takes about the following topic: {self.niche}. Make it exactly one sentence. Only return the topic, nothing else.")
 
         if not completion:
             error("Failed to generate Topic.")
-
-        self.subject = completion
+        else:
+            self.subject = completion
+            success(f"Generated topic: {completion}")
 
         return completion
 
@@ -167,6 +156,7 @@ class YouTube:
         Returns:
             script (str): The script of the video.
         """
+        info("Generating script for YouTube video")
         prompt = f"""
         Generate a script for a video in 4 sentences, depending on the subject of the video.
 
@@ -199,11 +189,11 @@ class YouTube:
             return
         
         if len(completion) > 5000:
-            if get_verbose():
-                warning("Generated Script is too long. Retrying...")
-            self.generate_script()
+            warning("Generated Script is too long. Retrying...")
+            return self.generate_script()
         
         self.script = completion
+        success(f"Generated script: {completion[:100]}... Length: {len(completion)} characters")
     
         return completion
 
@@ -214,11 +204,11 @@ class YouTube:
         Returns:
             metadata (dict): The generated metadata.
         """
+        info("Generating metadata for YouTube video")
         title = self.generate_response(f"Please generate a YouTube Video Title for the following subject, including hashtags: {self.subject}. Only return the title, nothing else. Limit the title under 100 characters.")
 
         if len(title) > 100:
-            if get_verbose():
-                warning("Generated Title is too long. Retrying...")
+            warning("Generated Title is too long. Retrying...")
             return self.generate_metadata()
 
         description = self.generate_response(f"Please generate a YouTube Video Description for the following script: {self.script}. Only return the description, nothing else.")
@@ -227,6 +217,7 @@ class YouTube:
             "title": title,
             "description": description
         }
+        success(f"Generated metadata: {self.metadata}, Title length: {len(title)} characters, Description length: {len(description)} characters")
 
         return self.metadata
     
@@ -237,7 +228,9 @@ class YouTube:
         Returns:
             image_prompts (List[str]): Generated List of image prompts.
         """
-        n_prompts = 5
+        info("Generating image prompts for YouTube video")
+        n_prompts = 3
+        info(f"Number of prompts requested: {n_prompts}")
 
         prompt = f"""
         Generate {n_prompts} Image Prompts for AI Image Generation,
@@ -264,10 +257,7 @@ class YouTube:
         For context, here is the full text:
         {self.script}
         """
-
-        completion = str(self.generate_response(prompt, model=parse_model(get_image_prompt_llm())))\
-            .replace("```json", "") \
-            .replace("```", "")
+        completion = str(self.generate_response(prompt, model=parse_model(get_image_prompt_llm())))
 
         image_prompts = []
 
@@ -276,24 +266,17 @@ class YouTube:
         else:
             try:
                 image_prompts = json.loads(completion)
-                if get_verbose():
-                    info(f" => Generated Image Prompts: {image_prompts}")
+                info(f"Generated Image Prompts: {image_prompts}")
             except Exception:
-                if get_verbose():
-                    warning("GPT returned an unformatted response. Attempting to clean...")
-
-                # Get everything between [ and ], and turn it into a list
+                warning("GPT returned an unformatted response. Attempting to clean...")
                 r = re.compile(r"\[.*\]")
                 image_prompts = r.findall(completion)
                 if len(image_prompts) == 0:
-                    if get_verbose():
-                        warning("Failed to generate Image Prompts. Retrying...")
+                    warning("Failed to generate Image Prompts. Retrying...")
                     return self.generate_prompts()
 
         self.image_prompts = image_prompts
 
-        # Check the amount of image prompts
-        # and remove if it's more than needed
         if len(image_prompts) > n_prompts:
             image_prompts = image_prompts[:n_prompts]
 
@@ -311,38 +294,29 @@ class YouTube:
         Returns:
             path (str): The path to the generated image.
         """
+        info(f"Generating image for prompt: {prompt[:50]}...")
         ok = False
-        while ok == False:
+        attempts = 0
+        while not ok:
+            attempts += 1
             url = f"https://hercai.onrender.com/{get_image_model()}/text2image?prompt={prompt}"
-
             r = requests.get(url)
             parsed = r.json()
 
             if "url" not in parsed or not parsed.get("url"):
-                # Retry
-                if get_verbose():
-                    info(f" => Failed to generate Image for Prompt: {prompt}. Retrying...")
-                ok = False
+                info(f"Failed to generate Image for Prompt: {prompt}. Retrying... Attempt: {attempts}")
             else:
                 ok = True
                 image_url = parsed["url"]
-
-                if get_verbose():
-                    info(f" => Generated Image: {image_url}")
-
+                info(f"Generated Image: {image_url}")
                 image_path = os.path.join(ROOT_DIR, ".mp", str(uuid4()) + ".png")
                 
                 with open(image_path, "wb") as image_file:
-                    # Write bytes to file
                     image_r = requests.get(image_url)
-
                     image_file.write(image_r.content)
 
-                if get_verbose():
-                    info(f" => Wrote Image to \"{image_path}\"\n")
-
+                info(f"Wrote Image to \"{image_path}\"")
                 self.images.append(image_path)
-                
                 return image_path
 
     def generate_script_to_speech(self, tts_instance: TTS) -> str:
@@ -355,18 +329,12 @@ class YouTube:
         Returns:
             path_to_wav (str): Path to generated audio (WAV Format).
         """
+        info("Generating speech from script")
         path = os.path.join(ROOT_DIR, ".mp", str(uuid4()) + ".wav")
-
-        # Clean script, remove every character that is not a word character, a space, a period, a question mark, or an exclamation mark.
         self.script = re.sub(r'[^\w\s.?!]', '', self.script)
-
         tts_instance.synthesize(self.script, path)
-
         self.tts_path = path
-
-        if get_verbose():
-            info(f" => Wrote TTS to \"{path}\"")
-
+        info(f"Generated speech saved to: {path}")
         return path
     
     def add_video(self, video: dict) -> None:
@@ -379,6 +347,7 @@ class YouTube:
         Returns:
             None
         """
+        info(f"Adding video to cache: {video}")
         videos = self.get_videos()
         videos.append(video)
 
@@ -387,15 +356,14 @@ class YouTube:
         with open(cache, "r") as file:
             previous_json = json.loads(file.read())
             
-            # Find our account
             accounts = previous_json["accounts"]
             for account in accounts:
                 if account["id"] == self._account_uuid:
                     account["videos"].append(video)
             
-            # Commit changes
             with open(cache, "w") as f:
                 f.write(json.dumps(previous_json))
+        success("Video added to cache")
 
     def generate_subtitles(self, audio_path: str) -> str:
         """
@@ -407,7 +375,7 @@ class YouTube:
         Returns:
             path (str): The path to the generated SRT File.
         """
-        # Turn the video into audio
+        info("Generating subtitles for the audio")
         aai.settings.api_key = get_assemblyai_api_key()
         config = aai.TranscriptionConfig()
         transcriber = aai.Transcriber(config=config)
@@ -415,10 +383,10 @@ class YouTube:
         subtitles = transcript.export_subtitles_srt()
 
         srt_path = os.path.join(ROOT_DIR, ".mp", str(uuid4()) + ".srt")
-
         with open(srt_path, "w") as file:
             file.write(subtitles)
-
+        
+        info(f"Generated subtitles saved to: {srt_path}")
         return srt_path
 
     def combine(self) -> str:
@@ -428,13 +396,20 @@ class YouTube:
         Returns:
             path (str): The path to the generated MP4 File.
         """
+        info("Starting to combine all elements into the final video")
         combined_image_path = os.path.join(ROOT_DIR, ".mp", str(uuid4()) + ".mp4")
         threads = get_threads()
+        info(f"Using {threads} threads for video processing")
+        
+        info("Loading TTS audio clip")
         tts_clip = AudioFileClip(self.tts_path)
         max_duration = tts_clip.duration
+        info(f"TTS clip duration: {max_duration} seconds")
+        
         req_dur = max_duration / len(self.images)
+        info(f"Required duration for each image: {req_dur} seconds")
 
-        # Make a generator that returns a TextClip when called with consecutive
+        info("Setting up text generator for subtitles")
         generator = lambda txt: TextClip(
             txt,
             font=os.path.join(get_fonts_dir(), get_font()),
@@ -445,74 +420,77 @@ class YouTube:
             size=(1080, 1920),
             method="caption",
         )
+        info(f"Using font: {get_font()}, Subtitle color: #FFFF00")
 
-        print(colored("[+] Combining images...", "blue"))
-
+        info("Starting to process and combine images")
         clips = []
         tot_dur = 0
-        # Add downloaded clips over and over until the duration of the audio (max_duration) has been reached
         while tot_dur < max_duration:
             for image_path in self.images:
+                info(f"Processing image: {image_path}")
                 clip = ImageClip(image_path)
                 clip.duration = req_dur
                 clip = clip.set_fps(30)
 
-                # Not all images are same size,
-                # so we need to resize them
                 if round((clip.w/clip.h), 4) < 0.5625:
-                    if get_verbose():
-                        info(f" => Resizing Image: {image_path} to 1080x1920")
-                    clip = crop(clip, width=clip.w, height=round(clip.w/0.5625), \
-                                x_center=clip.w / 2, \
+                    info(f"Resizing image {image_path} to 1080x1920")
+                    clip = crop(clip, width=clip.w, height=round(clip.w/0.5625), 
+                                x_center=clip.w / 2, 
                                 y_center=clip.h / 2)
                 else:
-                    if get_verbose():
-                        info(f" => Resizing Image: {image_path} to 1920x1080")
-                    clip = crop(clip, width=round(0.5625*clip.h), height=clip.h, \
-                                x_center=clip.w / 2, \
+                    info(f"Resizing image {image_path} to 1920x1080")
+                    clip = crop(clip, width=round(0.5625*clip.h), height=clip.h, 
+                                x_center=clip.w / 2, 
                                 y_center=clip.h / 2)
                 clip = clip.resize((1080, 1920))
 
-                # FX (Fade In)
-                #clip = clip.fadein(2)
-
                 clips.append(clip)
                 tot_dur += clip.duration
+                info(f"Total duration so far: {tot_dur} seconds")
 
+        info("Concatenating video clips")
         final_clip = concatenate_videoclips(clips)
         final_clip = final_clip.set_fps(30)
-        random_song = choose_random_song()
         
-        subtitles_path = self.generate_subtitles(self.tts_path)
+        info("Selecting random background song")
+        random_song = choose_random_song()
+        info(f"Selected background song: {random_song}")
 
-        # Equalize srt file
+        info("Generating subtitles")
+        subtitles_path = self.generate_subtitles(self.tts_path)
+        info(f"Subtitles generated at: {subtitles_path}")
+
+        info("Equalizing subtitles")
         equalize_subtitles(subtitles_path, 10)
         
-        # Burn the subtitles into the video
+        info("Burning subtitles into the video")
         subtitles = SubtitlesClip(subtitles_path, generator)
-
         subtitles.set_pos(("center", "center"))
-        random_song_clip = AudioFileClip(random_song).set_fps(44100)
 
-        # Turn down volume
+        info("Processing background music")
+        random_song_clip = AudioFileClip(random_song).set_fps(44100)
         random_song_clip = random_song_clip.fx(afx.volumex, 0.1)
+        
+        info("Composing final audio")
         comp_audio = CompositeAudioClip([
             tts_clip.set_fps(44100),
             random_song_clip
         ])
 
+        info("Setting final audio to video clip")
         final_clip = final_clip.set_audio(comp_audio)
         final_clip = final_clip.set_duration(tts_clip.duration)
 
-        # Add subtitles
+        info("Adding subtitles to final video")
         final_clip = CompositeVideoClip([
             final_clip,
             subtitles
         ])
 
+        info(f"Writing final video to {combined_image_path}")
         final_clip.write_videofile(combined_image_path, threads=threads)
 
-        success(f"Wrote Video to \"{combined_image_path}\"")
+        success(f"Video successfully created at: {combined_image_path}")
 
         return combined_image_path
 
@@ -526,33 +504,34 @@ class YouTube:
         Returns:
             path (str): The path to the generated MP4 File.
         """
-        # Generate the Topic
+        info("Starting video generation process")
+        
+        info("Generating topic")
         self.generate_topic()
-
-        # Generate the Script
+        
+        info("Generating script")
         self.generate_script()
-
-        # Generate the Metadata
+        
+        info("Generating metadata")
         self.generate_metadata()
-
-        # Generate the Image Prompts
+        
+        info("Generating image prompts")
         self.generate_prompts()
-
-        # Generate the Images
-        for prompt in self.image_prompts:
+        
+        info("Generating images")
+        for i, prompt in enumerate(self.image_prompts, 1):
+            info(f"Generating image {i}/{len(self.image_prompts)}")
             self.generate_image(prompt)
-
-        # Generate the TTS
+        
+        info("Generating text-to-speech audio")
         self.generate_script_to_speech(tts_instance)
-
-        # Combine everything
+        
+        info("Combining all elements into final video")
         path = self.combine()
-
-        if get_verbose():
-            info(f" => Generated Video: {path}")
-
+        
+        info(f"Video generation complete. File saved at: {path}")
         self.video_path = os.path.abspath(path)
-
+        
         return path
     
     def get_channel_id(self) -> str:
@@ -562,13 +541,18 @@ class YouTube:
         Returns:
             channel_id (str): The Channel ID.
         """
-        driver = self.browser
-        driver.get("https://studio.youtube.com")
-        time.sleep(2)
-        channel_id = driver.current_url.split("/")[-1]
-        self.channel_id = channel_id
-
-        return channel_id
+        try:
+            info("Getting Channel ID from YouTube Studio")
+            driver = self.browser
+            driver.get("https://studio.youtube.com")
+            time.sleep(2)
+            channel_id = driver.current_url.split("/")[-1]
+            self.channel_id = channel_id
+            success(f"Retrieved Channel ID: {channel_id}")
+            return channel_id
+        except Exception as e:
+            error(f"Failed to get Channel ID: {e}")
+            return None
 
     def upload_video(self) -> bool:
         """
@@ -578,6 +562,7 @@ class YouTube:
             success (bool): Whether the upload was successful or not.
         """
         try:
+            info("Starting video upload process")
             self.get_channel_id()
 
             driver = self.browser
@@ -585,6 +570,7 @@ class YouTube:
 
             # Go to youtube.com/upload
             driver.get("https://www.youtube.com/upload")
+            info("Navigated to YouTube upload page")
 
             # Set video file
             FILE_PICKER_TAG = "ytcp-uploads-file-picker"
@@ -592,6 +578,7 @@ class YouTube:
             INPUT_TAG = "input"
             file_input = file_picker.find_element(By.TAG_NAME, INPUT_TAG)
             file_input.send_keys(self.video_path)
+            info(f"Selected video file: {self.video_path}")
 
             # Wait for upload to finish
             time.sleep(5)
@@ -609,6 +596,7 @@ class YouTube:
             time.sleep(1)
             title_el.clear()
             title_el.send_keys(self.metadata["title"])
+            success(f"Set video title: {self.metadata['title']}")
 
             if verbose:
                 info("\t=> Setting description...")
@@ -619,6 +607,7 @@ class YouTube:
             time.sleep(0.5)
             description_el.clear()
             description_el.send_keys(self.metadata["description"])
+            success(f"Set video description: {self.metadata['description']}")
 
             time.sleep(0.5)
 
@@ -631,8 +620,10 @@ class YouTube:
 
             if not get_is_for_kids():
                 is_not_for_kids_checkbox.click()
+                info("Set video as not made for kids")
             else:
                 is_for_kids_checkbox.click()
+                info("Set video as made for kids")
 
             time.sleep(0.5)
 
@@ -664,6 +655,7 @@ class YouTube:
             
             radio_button = driver.find_elements(By.XPATH, YOUTUBE_RADIO_BUTTON_XPATH)
             radio_button[2].click()
+            success("Set video visibility to unlisted")
 
             if verbose:
                 info("\t=> Clicking done button...")
@@ -710,10 +702,10 @@ class YouTube:
             driver.quit()
 
             return True
-        except:
+        except Exception as e:
+            error(f"Failed to upload video: {e}")
             self.browser.quit()
             return False
-
 
     def get_videos(self) -> List[dict]:
         """
@@ -722,22 +714,27 @@ class YouTube:
         Returns:
             videos (List[dict]): The uploaded videos.
         """
-        if not os.path.exists(get_youtube_cache_path()):
-            # Create the cache file
-            with open(get_youtube_cache_path(), 'w') as file:
-                json.dump({
-                    "videos": []
-                }, file, indent=4)
+        try:
+            info("Retrieving uploaded videos from cache")
+            if not os.path.exists(get_youtube_cache_path()):
+                # Create the cache file
+                with open(get_youtube_cache_path(), 'w') as file:
+                    json.dump({
+                        "videos": []
+                    }, file, indent=4)
+                return []
+
+            videos = []
+            # Read the cache file
+            with open(get_youtube_cache_path(), 'r') as file:
+                previous_json = json.loads(file.read())
+                # Find our account
+                accounts = previous_json["accounts"]
+                for account in accounts:
+                    if account["id"] == self._account_uuid:
+                        videos = account["videos"]
+            success(f"Retrieved {len(videos)} videos from cache")
+            return videos
+        except Exception as e:
+            error(f"Failed to retrieve videos from cache: {e}")
             return []
-
-        videos = []
-        # Read the cache file
-        with open(get_youtube_cache_path(), 'r') as file:
-            previous_json = json.loads(file.read())
-            # Find our account
-            accounts = previous_json["accounts"]
-            for account in accounts:
-                if account["id"] == self._account_uuid:
-                    videos = account["videos"]
-
-        return videos
