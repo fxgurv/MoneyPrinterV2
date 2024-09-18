@@ -12,7 +12,7 @@ def error(message: str, show_emoji: bool = True) -> None:
         None
     """
     emoji = "❌" if show_emoji else ""
-    print(colored(f"{emoji} {message}", "red"))
+    print(colored(f"{emoji} {message}", "white"))
 
 def success(message: str, show_emoji: bool = True) -> None:
     """
@@ -40,7 +40,7 @@ def info(message: str, show_emoji: bool = True) -> None:
         None
     """
     emoji = "ℹ️" if show_emoji else ""
-    print(colored(f"{emoji} {message}", "magenta"))
+    print(colored(f"{emoji} {message}", "white"))
 
 def warning(message: str, show_emoji: bool = True) -> None:
     """
@@ -68,4 +68,4 @@ def question(message: str, show_emoji: bool = True) -> str:
         user_input (str): The user's input
     """
     emoji = "❓" if show_emoji else ""
-    return input(colored(f"{emoji} {message}", "magenta"))
+    return input(colored(f"{emoji} {message}", "white"))
