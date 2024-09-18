@@ -6,7 +6,7 @@ prettytable
 webdriver_manager
 selenium_firefox
 selenium
-g4f
+g4f[all]
 moviepy
 Pillow==9.5.0
 yagmail
