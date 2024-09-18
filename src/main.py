@@ -1,7 +1,5 @@
 import schedule
 import subprocess
-import os
-import sys
 
 from art import *
 from cache import *
@@ -19,11 +17,12 @@ from classes.Outreach import Outreach
 from classes.AFM import AffiliateMarketing
 
 def main():
+    info("Starting main function")
 
-    # Get user input
     valid_input = False
     while not valid_input:
         try:
+            info("Displaying options to user")
             info("\n============ OPTIONS ============", False)
 
             for idx, option in enumerate(OPTIONS):
@@ -32,28 +31,30 @@ def main():
             info("=================================\n", False)
             user_input = input("Select an option: ").strip()
             if user_input == '':
+                warning("Empty input received")
                 print("\n" * 100)
                 raise ValueError("Empty input is not allowed.")
             user_input = int(user_input)
             valid_input = True
+            info(f"User selected option: {user_input}")
         except ValueError as e:
+            error(f"Invalid input: {e}")
             print("\n" * 100)
-            print(f"Invalid input: {e}")
 
-    # Start the selected option
     if user_input == 1:
         info("Starting YT Shorts Automater...")
 
         cached_accounts = get_accounts("youtube")
+        info(f"Retrieved {len(cached_accounts)} cached YouTube accounts")
 
         if len(cached_accounts) == 0:
-            info("No accounts found in cache. Choose an option:")
-            print(colored(" 1. Create one now?", "cyan"))
-            print(colored(" 2. Auto setup", "cyan"))
-            user_input = input("Select an option: ").strip()
+            warning("No accounts found in cache. Prompting to create one.")
+            user_input = question("Yes/No: ")
 
-            if user_input == '1':
+            if user_input.lower() == "yes":
                 generated_uuid = str(uuid4())
+                info(f"Generated new UUID: {generated_uuid}")
+
                 success(f" => Generated ID: {generated_uuid}")
                 nickname = question(" => Enter a nickname for this account: ")
                 fp_profile = question(" => Enter the path to the Firefox profile: ")
@@ -68,24 +69,9 @@ def main():
                     "language": language,
                     "videos": []
                 })
-            elif user_input == '2':
-                temp_youtube = YouTube("temp", "temp", get_firefox_profile_path(), "temp", get_twitter_language(), get_headless())
-                channels = temp_youtube.get_all_channels()
-                temp_youtube.browser.quit()
-
-                for channel in channels:
-                    generated_uuid = str(uuid4())
-                    success(f" => Generated ID for channel '{channel['name']}': {generated_uuid}")
-                    niche = question(f" => Enter the niche for channel '{channel['name']}': ")
-                    add_account("youtube", {
-                        "id": generated_uuid,
-                        "nickname": channel['name'],
-                        "firefox_profile": get_firefox_profile_path(),
-                        "niche": niche,
-                        "language": get_twitter_language(),
-                        "videos": []
-                    })
+                success(f"Added new YouTube account: {nickname}")
         else:
+            info("Displaying cached YouTube accounts")
             table = PrettyTable()
             table.field_names = ["ID", "UUID", "Nickname", "Niche"]
 
@@ -103,9 +89,10 @@ def main():
                     selected_account = account
 
             if selected_account is None:
-                error("Invalid account selected. Please try again.", "red")
+                error("Invalid account selected. Restarting main function.")
                 main()
             else:
+                info(f"Selected YouTube account: {selected_account['nickname']}")
                 youtube = YouTube(
                     selected_account["id"],
                     selected_account["nickname"],
@@ -116,6 +103,7 @@ def main():
 
                 while True:
                     rem_temp_files()
+                    info("Removed temporary files")
                     info("\n============ OPTIONS ============", False)
 
                     for idx, youtube_option in enumerate(YOUTUBE_OPTIONS):
@@ -123,19 +111,23 @@ def main():
 
                     info("=================================\n", False)
 
-                    # Get user input
                     user_input = int(question("Select an option: "))
+                    info(f"User selected YouTube option: {user_input}")
                     tts = TTS()
 
                     if user_input == 1:
+                        info("Generating YouTube video")
                         youtube.generate_video(tts)
                         upload_to_yt = question("Do you want to upload this video to YouTube? (Yes/No): ")
                         if upload_to_yt.lower() == "yes":
+                            info("Uploading video to YouTube")
                             youtube.upload_video()
                     elif user_input == 2:
+                        info("Retrieving YouTube videos")
                         videos = youtube.get_videos()
 
                         if len(videos) > 0:
+                            info(f"Displaying {len(videos)} videos")
                             videos_table = PrettyTable()
                             videos_table.field_names = ["ID", "Date", "Title"]
 
@@ -148,8 +140,9 @@ def main():
 
                             print(videos_table)
                         else:
-                            warning(" No videos found.")
+                            warning("No videos found.")
                     elif user_input == 3:
+                        info("Setting up CRON job for YouTube uploads")
                         info("How often do you want to upload?")
 
                         info("\n============ OPTIONS ============", False)
@@ -164,34 +157,40 @@ def main():
                         command = f"python {cron_script_path} youtube {selected_account['id']}"
 
                         def job():
+                            info("Executing CRON job for YouTube upload")
                             subprocess.run(command)
 
                         if user_input == 1:
-                            # Upload Once
+                            info("Setting up daily upload")
                             schedule.every(1).day.do(job)
-                            success("Set up CRON Job.")
+                            success("Set up CRON Job for daily upload.")
                         elif user_input == 2:
-                            # Upload Twice a day
+                            info("Setting up twice daily upload")
                             schedule.every().day.at("10:00").do(job)
                             schedule.every().day.at("16:00").do(job)
-                            success("Set up CRON Job.")
+                            success("Set up CRON Job for twice daily upload.")
                         else:
+                            info("Returning to main menu")
                             break
                     elif user_input == 4:
                         if get_verbose():
                             info(" => Climbing Options Ladder...", False)
+                        info("Returning to main menu")
                         break
+
     elif user_input == 2:
         info("Starting Twitter Bot...")
 
         cached_accounts = get_accounts("twitter")
+        info(f"Retrieved {len(cached_accounts)} cached Twitter accounts")
 
         if len(cached_accounts) == 0:
-            warning("No accounts found in cache. Create one now?")
+            warning("No accounts found in cache. Prompting to create one.")
             user_input = question("Yes/No: ")
 
             if user_input.lower() == "yes":
                 generated_uuid = str(uuid4())
+                info(f"Generated new UUID: {generated_uuid}")
 
                 success(f" => Generated ID: {generated_uuid}")
                 nickname = question(" => Enter a nickname for this account: ")
@@ -205,7 +204,9 @@ def main():
                     "topic": topic,
                     "posts": []
                 })
+                success(f"Added new Twitter account: {nickname}")
         else:
+            info("Displaying cached Twitter accounts")
             table = PrettyTable()
             table.field_names = ["ID", "UUID", "Nickname", "Account Topic"]
 
@@ -223,13 +224,20 @@ def main():
                     selected_account = account
 
             if selected_account is None:
-                error("Invalid account selected. Please try again.", "red")
+                error("Invalid account selected. Restarting main function.")
                 main()
             else:
-                twitter = Twitter(selected_account["id"], selected_account["nickname"], selected_account["firefox_profile"], selected_account["topic"])
+                info(f"Selected Twitter account: {selected_account['nickname']}")
+                twitter = Twitter(
+                    selected_account["id"],
+                    selected_account["nickname"],
+                    selected_account["firefox_profile"],
+                    selected_account["topic"]
+                )
 
                 while True:
-                    
+                    rem_temp_files()
+                    info("Removed temporary files")
                     info("\n============ OPTIONS ============", False)
 
                     for idx, twitter_option in enumerate(TWITTER_OPTIONS):
@@ -237,27 +245,33 @@ def main():
 
                     info("=================================\n", False)
 
-                    # Get user input
                     user_input = int(question("Select an option: "))
+                    info(f"User selected Twitter option: {user_input}")
 
                     if user_input == 1:
+                        info("Posting to Twitter")
                         twitter.post()
                     elif user_input == 2:
+                        info("Retrieving Twitter posts")
                         posts = twitter.get_posts()
 
-                        posts_table = PrettyTable()
+                        if len(posts) > 0:
+                            info(f"Displaying {len(posts)} posts")
+                            posts_table = PrettyTable()
+                            posts_table.field_names = ["ID", "Date", "Content"]
 
-                        posts_table.field_names = ["ID", "Date", "Content"]
+                            for post in posts:
+                                posts_table.add_row([
+                                    posts.index(post) + 1,
+                                    colored(post["date"], "blue"),
+                                    colored(post["content"][:60] + "...", "green")
+                                ])
 
-                        for post in posts:
-                            posts_table.add_row([
-                                posts.index(post) + 1,
-                                colored(post["date"], "blue"),
-                                colored(post["content"][:60] + "...", "green")
-                            ])
-
-                        print(posts_table)
+                            print(posts_table)
+                        else:
+                            warning("No posts found.")
                     elif user_input == 3:
+                        info("Setting up CRON job for Twitter posts")
                         info("How often do you want to post?")
 
                         info("\n============ OPTIONS ============", False)
@@ -272,37 +286,41 @@ def main():
                         command = f"python {cron_script_path} twitter {selected_account['id']}"
 
                         def job():
+                            info("Executing CRON job for Twitter post")
                             subprocess.run(command)
 
                         if user_input == 1:
-                            # Post Once a day
+                            info("Setting up daily post")
                             schedule.every(1).day.do(job)
-                            success("Set up CRON Job.")
+                            success("Set up CRON Job for daily post.")
                         elif user_input == 2:
-                            # Post twice a day
+                            info("Setting up twice daily post")
                             schedule.every().day.at("10:00").do(job)
                             schedule.every().day.at("16:00").do(job)
-                            success("Set up CRON Job.")
+                            success("Set up CRON Job for twice daily post.")
                         elif user_input == 3:
-                            # Post thrice a day
+                            info("Setting up thrice daily post")
                             schedule.every().day.at("08:00").do(job)
                             schedule.every().day.at("12:00").do(job)
                             schedule.every().day.at("18:00").do(job)
-                            success("Set up CRON Job.")
+                            success("Set up CRON Job for thrice daily post.")
                         else:
+                            info("Returning to main menu")
                             break
-
                     elif user_input == 4:
                         if get_verbose():
                             info(" => Climbing Options Ladder...", False)
+                        info("Returning to main menu")
                         break
+
     elif user_input == 3:
         info("Starting Affiliate Marketing...")
 
         cached_products = get_products()
+        info(f"Retrieved {len(cached_products)} cached products")
 
         if len(cached_products) == 0:
-            warning("No products found in cache. Create one now?")
+            warning("No products found in cache. Prompting to create one.")
             user_input = question("Yes/No: ")
 
             if user_input.lower() == "yes":
@@ -320,12 +338,16 @@ def main():
                     "affiliate_link": affiliate_link,
                     "twitter_uuid": twitter_uuid
                 })
+                success(f"Added new product with affiliate link: {affiliate_link}")
 
                 afm = AffiliateMarketing(affiliate_link, account["firefox_profile"], account["id"], account["nickname"], account["topic"])
 
+                info("Generating pitch for affiliate marketing")
                 afm.generate_pitch()
+                info("Sharing pitch on Twitter")
                 afm.share_pitch("twitter")
         else:
+            info("Displaying cached products")
             table = PrettyTable()
             table.field_names = ["ID", "Affiliate Link", "Twitter Account UUID"]
 
@@ -343,9 +365,10 @@ def main():
                     selected_product = product
 
             if selected_product is None:
-                error("Invalid product selected. Please try again.", "red")
+                error("Invalid product selected. Restarting main function.")
                 main()
             else:
+                info(f"Selected product with affiliate link: {selected_product['affiliate_link']}")
                 # Find the account
                 account = None
                 for acc in get_accounts("twitter"):
@@ -354,40 +377,44 @@ def main():
 
                 afm = AffiliateMarketing(selected_product["affiliate_link"], account["firefox_profile"], account["id"], account["nickname"], account["topic"])
 
+                info("Generating pitch for affiliate marketing")
                 afm.generate_pitch()
+                info("Sharing pitch on Twitter")
                 afm.share_pitch("twitter")
 
     elif user_input == 4:
         info("Starting Outreach...")
 
         outreach = Outreach()
-
         outreach.start()
     elif user_input == 5:
         if get_verbose():
-            print(colored(" => Quitting...", "blue"))
+            info(" => Quitting...", False)
+        info("Exiting application")
         sys.exit(0)
     else:
-        error("Invalid option selected. Please try again.", "red")
+        error("Invalid option selected. Restarting main function.")
         main()
-    
 
 if __name__ == "__main__":
-    # Print ASCII Banner
+    info("Starting application")
     print_banner()
+    info("Printed ASCII banner")
 
     first_time = get_first_time_running()
+    info(f"First time running: {first_time}")
 
     if first_time:
+        info("First time setup initiated")
         print(colored("Hey! It looks like you're running MoneyPrinter V2 for the first time. Let's get you setup first!", "yellow"))
 
-    # Setup file tree
+    info("Setting up file tree")
     assert_folder_structure()
 
-    # Remove temporary files
+    info("Removing temporary files")
     rem_temp_files()
 
-    # Fetch MP3 Files
+    info("Fetching MP3 files")
     fetch_songs()
 
     while True:
